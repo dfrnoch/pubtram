@@ -42,7 +42,7 @@ To run on a device, set your team and change the bundle IDs and the app group to
 ## Backend API (unofficial, reverse-engineered)
 
 Base URL: `https://jizdnirady.seznam.cz`. The web app sends binary FastRPC, but the server also
-speaks plain **XML-RPC**, which is what `API/RPCValue.swift` implements.
+speaks plain **XML-RPC**, which is what `Shared/API/RPCValue.swift` implements.
 
 | Call | Purpose |
 |---|---|
@@ -53,5 +53,5 @@ speaks plain **XML-RPC**, which is what `API/RPCValue.swift` implements.
 | `getWalkGeom({start:{x,y}, end:{x,y}})` | Walking geometry |
 | `getStopDepartures(date, {start,end,mid,index,count}, {version:3})` | Departure board (not used by the website) |
 
-Geometry strings use Mapy.cz's compact polyline encoding (see `API/GeometryDecoder.swift`).
+Geometry strings use Mapy.cz's compact polyline encoding (see `Shared/API/GeometryDecoder.swift`).
 Because this API is undocumented, it may change without notice.
