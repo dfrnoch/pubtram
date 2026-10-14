@@ -126,7 +126,7 @@ private struct FavoriteRouteRow: View {
                     VStack(alignment: .leading, spacing: 1) {
                         Text(route.title)
                             .font(.body.weight(.semibold))
-                            .lineLimit(1)
+                            .lineLimit(2)
                         if route.name != nil {
                             Text(route.placesLabel)
                                 .font(.caption)

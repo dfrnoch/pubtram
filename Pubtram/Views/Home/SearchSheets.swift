@@ -9,32 +9,35 @@ struct TimeSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Picker("Typ", selection: $isDeparture) {
-                    Text("Odjezd").tag(true)
-                    Text("Příjezd").tag(false)
-                }
-                .pickerStyle(.segmented)
-                .listRowBackground(Color.clear)
-                .listRowInsets(EdgeInsets())
-
                 Section {
-                    DatePicker("Datum a čas", selection: $draft, displayedComponents: [.date, .hourAndMinute])
-                        .datePickerStyle(.graphical)
-                }
-
-                Section {
-                    HStack {
-                        quick("Teď") { draft = .now }
-                        quick("+15 min") { draft = draft.addingTimeInterval(15 * 60) }
-                        quick("+1 h") { draft = draft.addingTimeInterval(3600) }
-                        quick("Zítra 7:00") { draft = tomorrow(hour: 7) }
+                    Picker("Typ", selection: $isDeparture) {
+                        Text("Odjezd").tag(true)
+                        Text("Příjezd").tag(false)
                     }
-                    .buttonStyle(.bordered)
-                    .listRowBackground(Color.clear)
-                    .listRowInsets(EdgeInsets())
+                    .pickerStyle(.segmented)
+
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            quick("Teď") { draft = .now }
+                            quick("+15 min") { draft = draft.addingTimeInterval(15 * 60) }
+                            quick("+1 h") { draft = draft.addingTimeInterval(3600) }
+                            quick("Zítra 7:00") { draft = tomorrow(hour: 7) }
+                            quick("Zítra 16:00") { draft = tomorrow(hour: 16) }
+                        }
+                    }
+                }
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
+
+                Section {
+                    DatePicker("Den", selection: $draft, displayedComponents: .date)
+                    DatePicker("Čas", selection: $draft, displayedComponents: .hourAndMinute)
+                        .datePickerStyle(.wheel)
+                        .frame(maxWidth: .infinity)
+                        .labelsHidden()
                 }
             }
-            .navigationTitle("Čas")
+            .navigationTitle(isDeparture ? "Čas odjezdu" : "Čas příjezdu")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -66,8 +69,8 @@ struct TimeSheet: View {
 
     private func quick(_ title: String, action: @escaping () -> Void) -> some View {
         Button(title, action: action)
-            .font(.footnote)
-            .frame(maxWidth: .infinity)
+            .font(.subheadline.weight(.medium))
+            .buttonStyle(.glass)
     }
 
     private func tomorrow(hour: Int) -> Date {

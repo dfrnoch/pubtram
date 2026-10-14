@@ -70,6 +70,13 @@ enum Fmt {
         return time(date)
     }
 
+    /// "za 12 min" when soon, otherwise "zítra v 7:32" / "v 14:05".
+    static func departureHint(to date: Date, now: Date = .now) -> String {
+        if date.timeIntervalSince(now) < 3 * 3600 { return countdown(to: date, now: now) }
+        let d = day(date)
+        return d == "dnes" ? "v \(time(date))" : "\(d) v \(time(date))"
+    }
+
     static func transfers(_ count: Int) -> String {
         switch count {
         case 0: "přímé"

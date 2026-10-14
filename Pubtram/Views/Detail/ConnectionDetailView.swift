@@ -131,7 +131,7 @@ private struct SummaryCard: View {
             if connection.firstRide != nil {
                 TimelineView(.everyMinute) { context in
                     Label(
-                        "Vyrazte \(Fmt.countdown(to: connection.effectiveDeparture, now: context.date))",
+                        "Vyrazte \(Fmt.departureHint(to: connection.effectiveDeparture, now: context.date))",
                         systemImage: "figure.walk.departure")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.tint)

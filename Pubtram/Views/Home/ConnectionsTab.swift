@@ -42,7 +42,7 @@ private struct CompactConnections: View {
             HomeView()
                 .navigationDestination(for: SearchDestination.self) { destination in
                     switch destination {
-                    case .results: ResultsView()
+                    case .results: ResultsView(pushesDetail: true)
                     case .connection(let id): ConnectionDetailView(connectionID: id)
                     }
                 }
@@ -50,43 +50,52 @@ private struct CompactConnections: View {
     }
 }
 
+/// iPad: the sidebar is a stack (home → results) like Apple Maps; the detail sits beside it.
 private struct RegularConnections: View {
     @Environment(SearchModel.self) private var model
     @State private var visibility = NavigationSplitViewVisibility.all
 
+    private var sidebarPath: Binding<[SearchDestination]> {
+        Binding {
+            model.showsResults ? [.results] : []
+        } set: { newPath in
+            model.showsResults = newPath.contains(.results)
+            if !model.showsResults { model.selectedID = nil }
+        }
+    }
+
     var body: some View {
-        GeometryReader { proxy in
-            NavigationSplitView(columnVisibility: $visibility) {
+        NavigationSplitView(columnVisibility: $visibility) {
+            NavigationStack(path: sidebarPath) {
                 HomeView()
-                    .navigationSplitViewColumnWidth(min: 320, ideal: 360, max: 420)
-            } content: {
-                Group {
-                    if model.showsResults {
-                        ResultsView()
-                    } else {
-                        ContentUnavailableView(
-                            "Kam to bude?", systemImage: "tram.fill",
-                            description: Text("Zadejte odkud a kam chcete jet, nebo vyberte oblíbenou trasu."))
+                    .navigationDestination(for: SearchDestination.self) { _ in
+                        ResultsView(pushesDetail: false)
                     }
-                }
-                .navigationSplitViewColumnWidth(min: 340, ideal: 400, max: 480)
-            } detail: {
-                NavigationStack {
-                    if let id = model.selectedID, model.connection(id: id) != nil {
-                        ConnectionDetailView(connectionID: id)
-                            .id(id)
-                    } else {
-                        ContentUnavailableView(
-                            "Vyberte spojení", systemImage: "point.topleft.down.to.point.bottomright.curvepath",
-                            description: Text("Detail s mapou a živými informacemi se zobrazí tady."))
-                    }
+            }
+            .navigationSplitViewColumnWidth(min: 360, ideal: 420, max: 500)
+        } detail: {
+            NavigationStack {
+                if let id = model.selectedID, model.connection(id: id) != nil {
+                    ConnectionDetailView(connectionID: id)
+                        .id(id)
+                } else if model.showsResults {
+                    ContentUnavailableView(
+                        "Vyberte spojení", systemImage: "point.topleft.down.to.point.bottomright.curvepath",
+                        description: Text("Detail s mapou a živými informacemi se zobrazí tady."))
+                } else {
+                    ContentUnavailableView(
+                        "Kam to bude?", systemImage: "tram.fill",
+                        description: Text("Zadejte odkud a kam chcete jet, nebo vyberte oblíbenou trasu."))
                 }
             }
-            .onChange(of: model.showsResults) { _, showing in
-                // Give results and detail the room on narrower iPads.
-                if showing && proxy.size.width < 1200 { withAnimation { visibility = .doubleColumn } }
-                if !showing { withAnimation { visibility = .all } }
-            }
+        }
+        .navigationSplitViewStyle(.balanced)
+        .onChange(of: model.showsResults) { _, showing in
+            if showing { visibility = .all }
+        }
+        .onChange(of: model.connections.first?.id) { _, first in
+            // Pick the first result so the detail column isn't empty.
+            if model.selectedID == nil, let first { model.selectedID = first }
         }
     }
 }

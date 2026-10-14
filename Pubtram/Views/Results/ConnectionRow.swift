@@ -24,7 +24,7 @@ struct ConnectionRow: View {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 if let ride = connection.firstRide {
                     TimelineView(.everyMinute) { context in
-                        Text(Fmt.countdown(to: connection.effectiveDeparture, now: context.date))
+                        Text(Fmt.departureHint(to: connection.effectiveDeparture, now: context.date))
                             .font(.footnote.weight(.semibold))
                             // The selection highlight uses the accent color, so the tint would vanish.
                             .foregroundStyle(isSelected ? AnyShapeStyle(.primary) : AnyShapeStyle(.tint))

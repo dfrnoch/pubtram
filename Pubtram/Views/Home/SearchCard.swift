@@ -145,8 +145,9 @@ struct SearchCard: View {
     private func alternativeRow(_ field: PlaceField, index: Int, place: Place) -> some View {
         HStack(spacing: 12) {
             Text("nebo")
-                .font(.caption.weight(.medium))
+                .font(.caption2.weight(.semibold))
                 .foregroundStyle(.secondary)
+                .fixedSize()
                 .frame(width: 28)
             Button {
                 picking = PickRequest(field: field, index: index)
@@ -244,8 +245,10 @@ struct SearchCard: View {
 enum TimeLabel {
     static func text(date: Date?, isDeparture: Bool) -> String {
         guard let date else { return isDeparture ? "Odjezd teď" : "Příjezd teď" }
-        let kind = isDeparture ? "Odjezd" : "Příjezd"
         let day = Fmt.day(date)
-        return "\(kind) \(day == "dnes" ? "" : day + " ")\(Fmt.time(date))"
+        let when = day == "dnes" ? Fmt.time(date) : "\(day) \(Fmt.time(date))"
+        // Departure is the default, so only arrival needs spelling out.
+        if isDeparture { return day == "dnes" ? "Odjezd \(when)" : when.prefix(1).uppercased() + when.dropFirst() }
+        return "Příjezd \(when)"
     }
 }

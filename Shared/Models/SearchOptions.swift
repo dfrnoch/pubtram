@@ -52,6 +52,8 @@ struct SavedRoute: Codable, Hashable, Identifiable, Sendable {
     var id: String { from.map(\.id).joined(separator: "|") + "→" + to.map(\.id).joined(separator: "|") }
     var title: String { name ?? "\(from.label) → \(to.label)" }
     var placesLabel: String { "\(from.label) → \(to.label)" }
+    /// Short form for navigation bars: "Anděl +1 → Letňany".
+    var compactLabel: String { "\(from.shortLabel) → \(to.shortLabel)" }
     var reversed: SavedRoute { SavedRoute(from: to, to: from) }
     var usesCurrentLocation: Bool { (from + to).contains(where: \.isCurrentLocation) }
 }
@@ -81,5 +83,10 @@ extension Array where Element == Place {
         case 2: "\(self[0].name) nebo \(self[1].name)"
         default: "\(self[0].name) a \(count - 1) další"
         }
+    }
+
+    /// "Anděl", "Anděl +2"
+    var shortLabel: String {
+        count > 1 ? "\(self[0].name) +\(count - 1)" : (first?.name ?? "")
     }
 }

@@ -23,8 +23,8 @@ struct Connection: Identifiable, Hashable, Sendable {
     var maxDelay: Int? { rides.compactMap(\.delay).max() }
     var hasWarnings: Bool { rides.contains { !$0.notices.isEmpty } }
 
-    /// Estimated price of the whole journey.
-    var totalPrice: Price? { prices.first { $0.kind == .total } ?? prices.first }
+    /// Estimated price of the whole journey (partial prices alone would be misleading).
+    var totalPrice: Price? { prices.first { $0.kind == .total } }
     /// Tickets that can be bought online (whole journey or per carrier).
     var ticketOffers: [Price] { prices.filter { $0.url != nil } }
 
@@ -163,6 +163,12 @@ struct RideLeg: Identifiable, Hashable, Sendable {
     }
     var intermediateStopCount: Int { max(0, alightIndex - boardIndex - 1) }
     var displayLine: String { LineName.short(line) }
+    /// Train number or full designation when it differs from the public line ("Os 8102").
+    var lineDetail: String? {
+        let parts = line.components(separatedBy: " / ")
+        // Zero-padded licence numbers ("000437") add nothing over the short line.
+        return parts.count > 1 ? parts.dropFirst().joined(separator: " / ") : nil
+    }
 
     var boardPlatform: String? {
         boardStop.flatMap(livePlatform(at:)) ?? platform ?? boardStop?.platform

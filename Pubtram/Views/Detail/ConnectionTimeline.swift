@@ -183,16 +183,18 @@ private struct RideBlock: View {
                 stopHeader(ride.boardStop, platform: ride.boardPlatform)
 
                 VStack(alignment: .leading, spacing: 6) {
-                    HStack(alignment: .top, spacing: 8) {
-                        LineBadge(vehicle: ride.vehicle, line: ride.line, size: .large)
+                    HStack(alignment: .center, spacing: 10) {
+                        LineBadge(vehicle: ride.vehicle, line: ride.displayLine, size: .large)
                         VStack(alignment: .leading, spacing: 1) {
                             Text("směr \(ride.direction)")
-                                .font(.subheadline.weight(.medium))
+                                .font(.subheadline.weight(.semibold))
                                 .fixedSize(horizontal: false, vertical: true)
-                            if let agency = ride.agency {
-                                Text(agency)
+                            let detail = [ride.lineDetail, ride.agency].compactMap { $0 }.joined(separator: " · ")
+                            if !detail.isEmpty {
+                                Text(detail)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
                             }
                         }
                     }
@@ -324,17 +326,21 @@ private struct StopTimeLabel: View {
 
 private struct NoticeView: View {
     let notice: Notice
+    @State private var expanded = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Label(notice.text, systemImage: "exclamationmark.triangle.fill")
                 .font(.caption)
+                .lineLimit(expanded ? nil : 2)
                 .fixedSize(horizontal: false, vertical: true)
-            if let url = notice.url {
+            if expanded, let url = notice.url {
                 Link("Více informací", destination: url)
                     .font(.caption.weight(.semibold))
             }
         }
+        .contentShape(.rect)
+        .onTapGesture { withAnimation(.snappy) { expanded.toggle() } }
         .padding(8)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.orange.opacity(0.12), in: .rect(cornerRadius: 8))

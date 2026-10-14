@@ -81,6 +81,8 @@ struct PlatformBadge: View {
     var body: some View {
         Text(Platform.label(platform))
             .font(.caption2.weight(.semibold))
+            .lineLimit(1)
+            .fixedSize()
             .foregroundStyle(.secondary)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)

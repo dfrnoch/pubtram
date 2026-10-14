@@ -4,11 +4,12 @@ import SwiftUI
 struct ResultsView: View {
     @Environment(SearchModel.self) private var model
     @Environment(AppStore.self) private var store
-    @Environment(\.horizontalSizeClass) private var sizeClass
+    /// iPhone pushes the detail; iPad selects it in the split view's detail column.
+    var pushesDetail = true
     @State private var showsTime = false
     @State private var showsOptions = false
 
-    private var usesSelection: Bool { sizeClass != .compact }
+    private var usesSelection: Bool { !pushesDetail }
 
     var body: some View {
         @Bindable var model = model
@@ -67,7 +68,7 @@ struct ResultsView: View {
             }
         }
         .listSectionSpacing(.compact)
-        .navigationTitle(model.searchedRoute?.placesLabel ?? "Spojení")
+        .navigationTitle(model.searchedRoute?.compactLabel ?? "Spojení")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbar }
         .refreshable { await model.refreshLive() }
@@ -96,16 +97,7 @@ struct ResultsView: View {
 
     @ToolbarContentBuilder
     private var toolbar: some ToolbarContent {
-        ToolbarItemGroup(placement: .primaryAction) {
-            Menu {
-                Picker("Řazení", selection: Bindable(model).sort) {
-                    ForEach(SearchModel.Sort.allCases) { sort in
-                        Text(sort.title).tag(sort)
-                    }
-                }
-            } label: {
-                Label("Řazení", systemImage: "arrow.up.arrow.down")
-            }
+        ToolbarItem(placement: .primaryAction) {
             if let route = model.searchedRoute {
                 Button {
                     store.toggleFavorite(route)
@@ -170,12 +162,18 @@ private struct QueryChips: View {
                 }
                 .buttonStyle(.glass)
 
-                if model.from.count * model.to.count > 1 {
-                    Label("\(model.from.count * model.to.count) kombinace", systemImage: "arrow.triangle.merge")
-                        .font(.footnote.weight(.medium))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 4)
+                Menu {
+                    Picker("Řazení", selection: Bindable(model).sort) {
+                        ForEach(SearchModel.Sort.allCases) { sort in
+                            Text(sort.title).tag(sort)
+                        }
+                    }
+                } label: {
+                    Label(model.sort == .departure ? "Řazení" : model.sort.title, systemImage: "arrow.up.arrow.down")
+                        .lineLimit(1)
                 }
+                .buttonStyle(.glass)
+
             }
             .padding(.vertical, 4)
         }
