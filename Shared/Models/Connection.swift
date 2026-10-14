@@ -1,16 +1,19 @@
 import CoreLocation
 import Foundation
 
-/// One search result: a door-to-door journey made of rides and walks.
+/// One search result: a door-to-door journey made of rides, walks and waits.
 struct Connection: Identifiable, Hashable, Sendable {
     let id: Int
     let departure: Date
     let arrival: Date
     let transferCount: Int
-    let legs: [Leg]
+    var legs: [Leg]
     let prices: [Price]
     let startCoordinate: Coordinate?
     let endCoordinate: Coordinate?
+    /// The searched places this result belongs to (relevant for multi-place searches).
+    var origin: Place?
+    var destination: Place?
 
     var duration: TimeInterval { arrival.timeIntervalSince(departure) }
     var rides: [RideLeg] { legs.compactMap { if case .ride(let r) = $0 { r } else { nil } } }
@@ -20,11 +23,57 @@ struct Connection: Identifiable, Hashable, Sendable {
     var maxDelay: Int? { rides.compactMap(\.delay).max() }
     var hasWarnings: Bool { rides.contains { !$0.notices.isEmpty } }
 
+    /// Estimated price of the whole journey.
+    var totalPrice: Price? { prices.first { $0.kind == .total } ?? prices.first }
+    /// Tickets that can be bought online (whole journey or per carrier).
+    var ticketOffers: [Price] { prices.filter { $0.url != nil } }
+
+    /// When to leave: the first ride's departure including its current delay.
+    var effectiveDeparture: Date {
+        guard let ride = firstRide else { return departure }
+        let delay = ride.boardStop.flatMap(ride.delay(at:)) ?? 0
+        let walkBefore = legs.prefix { if case .ride = $0 { false } else { true } }
+            .reduce(0) { $0 + $1.duration }
+        return ride.departure.addingTimeInterval(TimeInterval(max(0, delay)) - walkBefore)
+    }
+
     func replacingRides(_ transform: (RideLeg) -> RideLeg) -> Connection {
-        Connection(
-            id: id, departure: departure, arrival: arrival, transferCount: transferCount,
-            legs: legs.map { if case .ride(let r) = $0 { .ride(transform(r)) } else { $0 } },
-            prices: prices, startCoordinate: startCoordinate, endCoordinate: endCoordinate)
+        var copy = self
+        copy.legs = legs.map { if case .ride(let r) = $0 { .ride(transform(r)) } else { $0 } }
+        return copy
+    }
+
+    /// Transfer between consecutive rides, accounting for live delays and walking time.
+    func transfer(before rideID: RideLeg.ID) -> Transfer? {
+        guard let index = rides.firstIndex(where: { $0.id == rideID }), index > 0 else { return nil }
+        let previous = rides[index - 1]
+        let next = rides[index]
+        guard let legStart = legs.firstIndex(where: { $0.id == "r\(previous.id)" }),
+            let legEnd = legs.firstIndex(where: { $0.id == "r\(next.id)" })
+        else { return nil }
+        let walking = legs[(legStart + 1)..<legEnd].reduce(0.0) { sum, leg in
+            if case .walk(let w) = leg { sum + w.arrival.timeIntervalSince(w.departure) } else { sum }
+        }
+        let arrivalDelay = previous.alightStop.flatMap(previous.delay(at:)) ?? 0
+        let departureDelay = max(0, next.boardStop.flatMap(next.delay(at:)) ?? 0)
+        let planned = next.departure.timeIntervalSince(previous.arrival)
+        let margin = planned + TimeInterval(departureDelay - max(0, arrivalDelay)) - walking
+        return Transfer(planned: planned, walking: walking, margin: margin, delayKnown: previous.delay != nil)
+    }
+}
+
+struct Transfer: Hashable, Sendable {
+    let planned: TimeInterval
+    let walking: TimeInterval
+    /// Spare time after walking, adjusted for delays.
+    let margin: TimeInterval
+    let delayKnown: Bool
+
+    enum Risk { case ok, tight, missed }
+    var risk: Risk {
+        if margin < 0 { return .missed }
+        if margin < 120 { return .tight }
+        return .ok
     }
 }
 
@@ -38,6 +87,10 @@ struct Coordinate: Hashable, Sendable, Codable {
         self.longitude = longitude
     }
 
+    init(_ coordinate: CLLocationCoordinate2D) {
+        self.init(latitude: coordinate.latitude, longitude: coordinate.longitude)
+    }
+
     /// API sends `[lon, lat]` pairs.
     init?(pair: RPCValue?) {
         let a = pair?.array ?? []
@@ -49,11 +102,13 @@ struct Coordinate: Hashable, Sendable, Codable {
 enum Leg: Identifiable, Hashable, Sendable {
     case ride(RideLeg)
     case walk(WalkLeg)
+    case wait(WaitLeg)
 
     var id: String {
         switch self {
         case .ride(let r): "r\(r.id)"
         case .walk(let w): "w\(w.id)"
+        case .wait(let w): "t\(w.id)"
         }
     }
 
@@ -61,6 +116,7 @@ enum Leg: Identifiable, Hashable, Sendable {
         switch self {
         case .ride(let r): r.departure
         case .walk(let w): w.departure
+        case .wait(let w): w.departure
         }
     }
 
@@ -68,8 +124,11 @@ enum Leg: Identifiable, Hashable, Sendable {
         switch self {
         case .ride(let r): r.arrival
         case .walk(let w): w.arrival
+        case .wait(let w): w.arrival
         }
     }
+
+    var duration: TimeInterval { arrival.timeIntervalSince(departure) }
 }
 
 struct RideLeg: Identifiable, Hashable, Sendable {
@@ -103,6 +162,7 @@ struct RideLeg: Identifiable, Hashable, Sendable {
         return stops[boardIndex...alightIndex]
     }
     var intermediateStopCount: Int { max(0, alightIndex - boardIndex - 1) }
+    var displayLine: String { LineName.short(line) }
 
     var boardPlatform: String? {
         boardStop.flatMap(livePlatform(at:)) ?? platform ?? boardStop?.platform
@@ -143,6 +203,18 @@ struct RideLeg: Identifiable, Hashable, Sendable {
     }
 }
 
+enum LineName {
+    /// `"Ex3 / rj 577"` → `"Ex3"`, licence numbers like `"000038"` → `"38"`.
+    static func short(_ line: String) -> String {
+        let first = line.components(separatedBy: " / ").first ?? line
+        if first.count >= 6, first.allSatisfy(\.isNumber) {
+            let trimmed = first.drop { $0 == "0" }
+            return trimmed.isEmpty ? first : String(trimmed)
+        }
+        return first
+    }
+}
+
 struct StopTime: Identifiable, Hashable, Sendable {
     let id: Int  // position in the trip
     let stopID: Int
@@ -167,15 +239,27 @@ struct WalkLeg: Identifiable, Hashable, Sendable {
     let to: Coordinate?
 }
 
+/// Time spent waiting at a stop (between arriving/walking and the next departure).
+struct WaitLeg: Identifiable, Hashable, Sendable {
+    let id: Int
+    let departure: Date
+    let arrival: Date
+}
+
 struct Notice: Hashable, Sendable {
     let text: String
     let url: URL?
 }
 
 struct Price: Hashable, Sendable {
+    enum Kind: Hashable, Sendable { case total, partial }
+
+    let kind: Kind
     let amount: Double
     let currency: String
     let seller: String?
+    let from: String?
+    let to: String?
     let url: URL?
 
     var formatted: String {
@@ -183,13 +267,16 @@ struct Price: Hashable, Sendable {
     }
 }
 
-/// A row of the stop departure board.
+/// A row of a departure board.
 struct Departure: Identifiable, Hashable, Sendable {
     let time: Date
     let line: String
     let vehicle: VehicleType
     let destination: String
-    var id: String { "\(time.timeIntervalSince1970)|\(line)|\(destination)" }
+    /// Set for boards combining several stops.
+    var stopName: String?
+    var id: String { "\(time.timeIntervalSince1970)|\(line)|\(destination)|\(stopName ?? "")" }
+    var displayLine: String { LineName.short(line) }
 }
 
 extension Array {

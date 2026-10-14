@@ -2,40 +2,36 @@ import SwiftUI
 
 @main
 struct PubtramApp: App {
-    @State private var store: AppStore
-    @State private var search: SearchModel
-    @State private var departures = DeparturesModel()
-
-    init() {
-        let store = AppStore()
-        _store = State(initialValue: store)
-        _search = State(initialValue: SearchModel(store: store))
-    }
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    @State private var router = AppRouter.shared
 
     var body: some Scene {
         WindowGroup {
             RootView()
-                .environment(store)
-                .environment(search)
-                .environment(departures)
+                .environment(router)
+                .environment(router.store)
+                .environment(router.search)
+                .environment(router.boards)
+                .environment(LiveActivityController.shared)
+                .onOpenURL { router.handle(url: $0) }
+                .task {
+                    SystemIntegration.updateQuickActions(routes: router.store.favoriteRoutes, boards: router.store.boards)
+                }
         }
     }
 }
 
-enum AppTab: Hashable {
-    case connections, departures
-}
-
 struct RootView: View {
-    @State private var tab: AppTab = .connections
+    @Environment(AppRouter.self) private var router
 
     var body: some View {
-        TabView(selection: $tab) {
+        @Bindable var router = router
+        TabView(selection: $router.tab) {
             Tab("Spojení", systemImage: "arrow.triangle.turn.up.right.diamond.fill", value: .connections) {
-                ConnectionsScreen()
+                ConnectionsTab()
             }
             Tab("Odjezdy", systemImage: "clock.fill", value: .departures) {
-                DeparturesScreen()
+                DeparturesTab()
             }
         }
     }

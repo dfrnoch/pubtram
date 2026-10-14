@@ -6,6 +6,8 @@ struct PlacePickerView: View {
     var near: Place?
     var kind: PubtranClient.SuggestKind = .any
     var allowsCurrentLocation = true
+    /// Places already chosen for this field – hidden from the lists.
+    var excluded: [Place] = []
     let onPick: (Place) -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -20,18 +22,11 @@ struct PlacePickerView: View {
         NavigationStack {
             List {
                 if trimmedQuery.isEmpty {
-                    if allowsCurrentLocation {
+                    if allowsCurrentLocation && !excluded.contains(where: \.isCurrentLocation) {
                         Button {
                             pick(.currentLocation(CLLocationCoordinate2D()))
                         } label: {
                             PlaceRow(place: .currentLocation(CLLocationCoordinate2D()))
-                        }
-                    }
-                    if kind == .stops && !store.favoriteStops.isEmpty {
-                        Section("Oblíbené zastávky") {
-                            ForEach(store.favoriteStops) { place in
-                                Button { pick(place) } label: { PlaceRow(place: place) }
-                            }
                         }
                     }
                     if !recents.isEmpty {
@@ -47,7 +42,7 @@ struct PlacePickerView: View {
                 } else if results.isEmpty && !isLoading {
                     ContentUnavailableView.search(text: trimmedQuery)
                 } else {
-                    ForEach(results) { place in
+                    ForEach(results.filter { !isExcluded($0) }) { place in
                         Button { pick(place) } label: { PlaceRow(place: place) }
                     }
                 }
@@ -78,7 +73,11 @@ struct PlacePickerView: View {
     private var trimmedQuery: String { query.trimmingCharacters(in: .whitespaces) }
 
     private var recents: [Place] {
-        kind == .stops ? store.recentPlaces.filter(\.isStop) : store.recentPlaces
+        (kind == .stops ? store.recentPlaces.filter(\.isStop) : store.recentPlaces).filter { !isExcluded($0) }
+    }
+
+    private func isExcluded(_ place: Place) -> Bool {
+        excluded.contains { $0.id == place.id }
     }
 
     private func fetch() async {

@@ -24,6 +24,8 @@ enum LocationProvider {
             if update.authorizationDenied || update.authorizationDeniedGlobally { throw LocationError.denied }
             if let location = update.location, location.horizontalAccuracy < 500 {
                 cached = (location.coordinate, .now)
+                // Widgets can't ask for location themselves; they reuse the last known one.
+                SharedStore.lastLocation = Coordinate(location.coordinate)
                 return location.coordinate
             }
         }

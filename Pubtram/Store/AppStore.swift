@@ -1,99 +1,143 @@
 import Foundation
 import Observation
 
-/// Favorites and history, persisted in UserDefaults.
+/// Favorites, boards and history. Persisted in the shared app group so widgets
+/// and Shortcuts see the same data.
 @MainActor @Observable
 final class AppStore {
     private(set) var favoriteRoutes: [SavedRoute] = []
     private(set) var recentRoutes: [SavedRoute] = []
-    private(set) var favoriteStops: [Place] = []
+    private(set) var boards: [SavedBoard] = []
     private(set) var recentPlaces: [Place] = []
-    var searchOptions = SearchOptions() { didSet { save(searchOptions, "searchOptions") } }
+    var searchOptions = SearchOptions() { didSet { SharedStore.save(searchOptions, .searchOptions) } }
 
-    private let defaults: UserDefaults
-
-    init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults
-        favoriteRoutes = load("favoriteRoutes") ?? []
-        recentRoutes = load("recentRoutes") ?? []
-        favoriteStops = load("favoriteStops") ?? []
-        recentPlaces = load("recentPlaces") ?? []
-        searchOptions = load("searchOptions") ?? SearchOptions()
+    init() {
+        favoriteRoutes = SharedStore.load(.favoriteRoutes) ?? []
+        recentRoutes = SharedStore.load(.recentRoutes) ?? []
+        boards = SharedStore.load(.boards) ?? []
+        recentPlaces = SharedStore.load(.recentPlaces) ?? []
+        searchOptions = SharedStore.load(.searchOptions) ?? SearchOptions()
     }
 
-    // MARK: Routes
+    // MARK: Favorite routes
 
-    func isFavorite(_ route: SavedRoute) -> Bool {
-        favoriteRoutes.contains { $0.id == route.id }
+    func favorite(matching route: SavedRoute) -> SavedRoute? {
+        favoriteRoutes.first { $0.id == route.id }
     }
+
+    func isFavorite(_ route: SavedRoute) -> Bool { favorite(matching: route) != nil }
 
     func toggleFavorite(_ route: SavedRoute) {
         if let i = favoriteRoutes.firstIndex(where: { $0.id == route.id }) {
             favoriteRoutes.remove(at: i)
         } else {
-            favoriteRoutes.insert(route, at: 0)
+            favoriteRoutes.append(route)
         }
-        save(favoriteRoutes, "favoriteRoutes")
+        routesChanged()
+    }
+
+    func rename(_ route: SavedRoute, to name: String) {
+        guard let i = favoriteRoutes.firstIndex(where: { $0.id == route.id }) else { return }
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        favoriteRoutes[i].name = trimmed.isEmpty ? nil : trimmed
+        routesChanged()
+    }
+
+    func removeFavorite(_ route: SavedRoute) {
+        favoriteRoutes.removeAll { $0.id == route.id }
+        routesChanged()
     }
 
     func removeFavoriteRoutes(at offsets: IndexSet) {
         favoriteRoutes.remove(atOffsets: offsets)
-        save(favoriteRoutes, "favoriteRoutes")
+        routesChanged()
     }
 
     func moveFavoriteRoutes(from source: IndexSet, to destination: Int) {
         favoriteRoutes.move(fromOffsets: source, toOffset: destination)
-        save(favoriteRoutes, "favoriteRoutes")
+        routesChanged()
     }
+
+    // MARK: Recent routes
 
     func addRecent(_ route: SavedRoute) {
         recentRoutes.removeAll { $0.id == route.id }
-        recentRoutes.insert(route, at: 0)
-        recentRoutes = Array(recentRoutes.prefix(10))
-        save(recentRoutes, "recentRoutes")
+        recentRoutes.insert(SavedRoute(from: route.from, to: route.to), at: 0)
+        recentRoutes = Array(recentRoutes.prefix(12))
+        SharedStore.save(recentRoutes, .recentRoutes)
     }
 
-    func removeRecentRoutes(at offsets: IndexSet) {
-        recentRoutes.remove(atOffsets: offsets)
-        save(recentRoutes, "recentRoutes")
+    func removeRecent(_ route: SavedRoute) {
+        recentRoutes.removeAll { $0.id == route.id }
+        SharedStore.save(recentRoutes, .recentRoutes)
     }
 
-    // MARK: Stops & places
-
-    func isFavorite(stop: Place) -> Bool {
-        favoriteStops.contains { $0.id == stop.id }
+    func clearRecentRoutes() {
+        recentRoutes = []
+        SharedStore.save(recentRoutes, .recentRoutes)
     }
 
-    func toggleFavorite(stop: Place) {
-        if let i = favoriteStops.firstIndex(where: { $0.id == stop.id }) {
-            favoriteStops.remove(at: i)
+    /// Any known route (favorite or recent) by ID – used by deep links.
+    func route(id: String) -> SavedRoute? {
+        favoriteRoutes.first { $0.id == id } ?? recentRoutes.first { $0.id == id }
+    }
+
+    // MARK: Boards
+
+    func savedBoard(matching board: SavedBoard) -> SavedBoard? {
+        boards.first { $0.id == board.id }
+    }
+
+    func isSaved(_ board: SavedBoard) -> Bool { savedBoard(matching: board) != nil }
+
+    /// Inserts a new board or replaces `original` with `board`.
+    func save(_ board: SavedBoard, replacing original: SavedBoard? = nil) {
+        if let original, let i = boards.firstIndex(where: { $0.id == original.id }) {
+            boards[i] = board
+        } else if let i = boards.firstIndex(where: { $0.id == board.id }) {
+            boards[i] = board
         } else {
-            favoriteStops.append(stop)
+            boards.append(board)
         }
-        save(favoriteStops, "favoriteStops")
+        boardsChanged()
     }
 
-    func removeFavoriteStops(at offsets: IndexSet) {
-        favoriteStops.remove(atOffsets: offsets)
-        save(favoriteStops, "favoriteStops")
+    func remove(_ board: SavedBoard) {
+        boards.removeAll { $0.id == board.id }
+        boardsChanged()
     }
+
+    func removeBoards(at offsets: IndexSet) {
+        boards.remove(atOffsets: offsets)
+        boardsChanged()
+    }
+
+    func moveBoards(from source: IndexSet, to destination: Int) {
+        boards.move(fromOffsets: source, toOffset: destination)
+        boardsChanged()
+    }
+
+    func board(id: String) -> SavedBoard? { boards.first { $0.id == id } }
+
+    // MARK: Places
 
     func addRecent(place: Place) {
         guard !place.isCurrentLocation else { return }
         recentPlaces.removeAll { $0.id == place.id }
         recentPlaces.insert(place, at: 0)
         recentPlaces = Array(recentPlaces.prefix(15))
-        save(recentPlaces, "recentPlaces")
+        SharedStore.save(recentPlaces, .recentPlaces)
     }
 
-    // MARK: Persistence
+    // MARK: Side effects
 
-    private func load<T: Decodable>(_ key: String) -> T? {
-        guard let data = defaults.data(forKey: key) else { return nil }
-        return try? JSONDecoder().decode(T.self, from: data)
+    private func routesChanged() {
+        SharedStore.save(favoriteRoutes, .favoriteRoutes)
+        SystemIntegration.favoritesChanged(routes: favoriteRoutes, boards: boards)
     }
 
-    private func save<T: Encodable>(_ value: T, _ key: String) {
-        defaults.set(try? JSONEncoder().encode(value), forKey: key)
+    private func boardsChanged() {
+        SharedStore.save(boards, .boards)
+        SystemIntegration.favoritesChanged(routes: favoriteRoutes, boards: boards)
     }
 }

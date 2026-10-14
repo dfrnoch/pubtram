@@ -60,7 +60,7 @@ struct TimeSheet: View {
     }
 
     private func finish() {
-        if model.canSearch { model.search() }
+        if model.showsResults && model.canSearch { model.search() }
         dismiss()
     }
 

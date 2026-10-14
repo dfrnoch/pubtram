@@ -3,6 +3,8 @@ import SwiftUI
 
 struct RouteMapView: View {
     let connection: Connection
+    /// Header maps are static previews; tapping them opens the full map.
+    var interactive = true
     @State private var geometries: [String: [CLLocationCoordinate2D]] = [:]
     @State private var position: MapCameraPosition = .automatic
 
@@ -19,7 +21,7 @@ struct RouteMapView: View {
                             .stroke(
                                 ride.vehicle.color(line: ride.line),
                                 style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round))
-                    case .walk:
+                    case .walk, .wait:
                         MapPolyline(coordinates: coords)
                             .stroke(.gray, style: StrokeStyle(lineWidth: 4, lineCap: .round, dash: [1, 8]))
                     }
@@ -59,9 +61,13 @@ struct RouteMapView: View {
         }
         .mapStyle(.standard(pointsOfInterest: .excludingAll))
         .mapControls {
-            MapUserLocationButton()
-            MapCompass()
+            if interactive {
+                MapUserLocationButton()
+                MapCompass()
+                MapScaleView()
+            }
         }
+        .allowsHitTesting(interactive)
         .task(id: connection.id) {
             await loadGeometries()
         }
@@ -82,6 +88,8 @@ struct RouteMapView: View {
             return ride.riddenStops.compactMap { $0.coordinate?.cl }
         case .walk(let walk):
             return [walk.from, walk.to].compactMap { $0?.cl }
+        case .wait:
+            return []
         }
     }
 
@@ -96,6 +104,8 @@ struct RouteMapView: View {
                     case .walk(let walk):
                         guard let from = walk.from, let to = walk.to, walk.distance > 30 else { return (leg.id, []) }
                         return (leg.id, (try? await client.walkGeometry(from: from, to: to)) ?? [])
+                    case .wait:
+                        return (leg.id, [])
                     }
                 }
             }

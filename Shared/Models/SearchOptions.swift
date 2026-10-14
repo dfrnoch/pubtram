@@ -42,9 +42,44 @@ struct SearchOptions: Codable, Hashable, Sendable {
     }
 }
 
-/// A saved/recent route pair.
+/// A saved/recent route. Each side may list several alternative places –
+/// the search tries every combination and merges the results.
 struct SavedRoute: Codable, Hashable, Identifiable, Sendable {
-    var from: Place
-    var to: Place
-    var id: String { from.id + "→" + to.id }
+    var from: [Place]
+    var to: [Place]
+    var name: String?
+
+    var id: String { from.map(\.id).joined(separator: "|") + "→" + to.map(\.id).joined(separator: "|") }
+    var title: String { name ?? "\(from.label) → \(to.label)" }
+    var placesLabel: String { "\(from.label) → \(to.label)" }
+    var reversed: SavedRoute { SavedRoute(from: to, to: from) }
+    var usesCurrentLocation: Bool { (from + to).contains(where: \.isCurrentLocation) }
+}
+
+/// A departure board combining one or more stops, optionally limited to some lines.
+struct SavedBoard: Codable, Hashable, Identifiable, Sendable {
+    var stops: [Place]
+    var lines: [String] = []
+    var name: String?
+
+    var id: String { stops.map(\.id).joined(separator: "|") + "#" + lines.joined(separator: ",") }
+    var title: String { name ?? stops.label }
+    var subtitle: String? {
+        var parts: [String] = []
+        if name != nil { parts.append(stops.label) }
+        if !lines.isEmpty { parts.append("linky " + lines.joined(separator: ", ")) }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+}
+
+extension Array where Element == Place {
+    /// "Anděl", "Anděl nebo Na Knížecí", "Anděl a 2 další"
+    var label: String {
+        switch count {
+        case 0: ""
+        case 1: self[0].name
+        case 2: "\(self[0].name) nebo \(self[1].name)"
+        default: "\(self[0].name) a \(count - 1) další"
+        }
+    }
 }

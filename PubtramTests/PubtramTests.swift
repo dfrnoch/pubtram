@@ -116,7 +116,7 @@ struct ResponseParserTests {
         let c = try #require(connections.first)
         #expect(c.id == 42)
         #expect(c.legs.count == 2)
-        #expect(c.prices.first?.amount == 36)
+        #expect(c.totalPrice?.amount == 36)
         #expect(c.duration == 9 * 60)
 
         let ride = try #require(c.firstRide)
@@ -175,5 +175,107 @@ struct FormattingTests {
         #expect(Fmt.duration(161 * 60) == "2 h 41 min")
         #expect(Fmt.delayMinutes(2160) == 36)
         #expect(Fmt.delayMinutes(-60) == 0)
+    }
+}
+
+struct JourneyModelTests {
+    private func iso(_ hm: String) -> RPCValue { .string("2026-10-15T\(hm):00+02:00") }
+
+    private func ride(_ id: String, line: String, from: String, to: String, delay: Int? = nil) -> RPCValue {
+        var info: [RPCValue] = []
+        if let delay { info.append(["id": 302, "delay": .int(delay), "text": "zpoždění"]) }
+        return [
+            "type": 0, "vehicleType": 7, "routeName": .string(line), "partDescription": .string(id),
+            "departureISO": iso(from), "arrivalISO": iso(to), "startStopTripIndex": 0, "endStopTripIndex": 1,
+            "info": .array(info),
+            "tripData": [
+                ["stopIndex": 0, "departureISO": iso(from), "arrivalISO": iso(from), "stCodes": []],
+                ["stopIndex": 1, "departureISO": iso(to), "arrivalISO": iso(to), "stCodes": []],
+            ],
+        ]
+    }
+
+    private func response(items: [RPCValue], payment: [RPCValue] = []) -> RPCValue {
+        [
+            "status": 200,
+            "stops": [["id": 1, "name": "A", "coord": [14.0, 50.0]], ["id": 2, "name": "B", "coord": [14.1, 50.1]]],
+            "routes": [["hash": 1, "departureISO": iso("08:00"), "arrivalISO": iso("10:00"), "items": .array(items), "payment": .array(payment)]],
+        ]
+    }
+
+    @Test func parsesWaitsAndPartialPrices() throws {
+        let value = response(
+            items: [
+                ride("r1", line: "Os 1", from: "08:00", to: "08:30"),
+                ["type": 2, "departureISO": iso("08:30"), "arrivalISO": iso("09:10")],
+                ride("r2", line: "R 2", from: "09:10", to: "10:00"),
+            ],
+            payment: [
+                ["type": "price", "price": 300.0, "currency_type": "CZK", "eshopName": ""],
+                ["type": "partialprice", "price": 120.0, "currency_type": "CZK", "eshopName": "České dráhy",
+                 "stopFrom": "A", "stopTo": "B", "url": "https://www.cd.cz/eshop?f=Horní+Planá"],
+            ])
+        let c = try #require(ResponseParser.connections(value).first)
+        #expect(c.legs.count == 3)
+        guard case .wait(let wait) = c.legs[1] else {
+            Issue.record("expected wait leg")
+            return
+        }
+        #expect(wait.arrival.timeIntervalSince(wait.departure) == 40 * 60)
+        #expect(c.totalPrice?.amount == 300)
+        #expect(c.totalPrice?.kind == .total)
+        #expect(c.ticketOffers.count == 1)
+        #expect(c.ticketOffers.first?.seller == "České dráhy")
+    }
+
+    @Test func transferRiskUsesDelays() throws {
+        let tight = response(items: [
+            ride("r1", line: "Os 1", from: "08:00", to: "08:30", delay: 4 * 60),
+            ride("r2", line: "R 2", from: "08:35", to: "10:00"),
+        ])
+        let c = try #require(ResponseParser.connections(tight).first)
+        let transfer = try #require(c.transfer(before: "r2"))
+        #expect(transfer.planned == 5 * 60)
+        #expect(transfer.margin == 60)
+        #expect(transfer.risk == .tight)
+
+        let missed = response(items: [
+            ride("r1", line: "Os 1", from: "08:00", to: "08:30", delay: 10 * 60),
+            ride("r2", line: "R 2", from: "08:35", to: "10:00"),
+        ])
+        let m = try #require(ResponseParser.connections(missed).first)
+        #expect(m.transfer(before: "r2")?.risk == .missed)
+        #expect(m.transfer(before: "r1") == nil)
+    }
+
+    @Test func shortLineNames() {
+        #expect(LineName.short("Ex3 / rj 577") == "Ex3")
+        #expect(LineName.short("000038") == "38")
+        #expect(LineName.short("410100") == "410100")
+        #expect(LineName.short("B") == "B")
+    }
+
+    @Test func weightedLayoutRespectsMinimums() {
+        let widths = WeightedHStack.widths(available: 300, weights: [60, 6000, 60], minimums: [26, 26, 26])
+        #expect(widths[0] == 26)
+        #expect(widths[2] == 26)
+        #expect(abs(widths.reduce(0, +) - 300) < 0.001)
+    }
+
+    @Test func deepLinksRoundTrip() {
+        for link in [DeepLink.route(id: "pubt:1:50.0,14.0→coor:0:1,2"), .board(id: "pubt:5|pubt:6#9,22"), .departures, .search] {
+            #expect(DeepLink(url: link.url) == link)
+        }
+    }
+
+    @Test func multiSearchBuildsAllPairs() {
+        let a = Place(placeID: 1, source: "pubt", name: "Anděl", latitude: 50, longitude: 14)
+        let b = Place(placeID: 2, source: "pubt", name: "Na Knížecí", latitude: 50, longitude: 14)
+        let c = Place(placeID: 3, source: "pubt", name: "Letňany", latitude: 50, longitude: 14)
+        let search = MultiSearch(from: [a, b], to: [c, a], via: nil, date: .now, isDeparture: true, options: SearchOptions())
+        // a→a is skipped.
+        #expect(search.pairs.count == 3)
+        #expect([a, b].label == "Anděl nebo Na Knížecí")
+        #expect([a, b, c].label == "Anděl a 2 další")
     }
 }

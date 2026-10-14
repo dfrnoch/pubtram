@@ -3,21 +3,15 @@ import SwiftUI
 struct ConnectionRow: View {
     let connection: Connection
     var isSelected = false
+    var isFastest = false
+    var showsDestination = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text("\(Fmt.time(connection.departure)) – \(Fmt.time(connection.arrival))")
-                    .font(.title3.weight(.semibold))
-                    .monospacedDigit()
+                times
                 if let delay = connection.maxDelay {
                     DelayBadge(delay: delay, compact: true)
-                }
-                if connection.hasWarnings {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                        .accessibilityLabel("Omezení provozu")
                 }
                 Spacer(minLength: 4)
                 Text(Fmt.duration(connection.duration))
@@ -25,17 +19,17 @@ struct ConnectionRow: View {
                     .foregroundStyle(.secondary)
             }
 
-            LegStrip(legs: connection.legs)
+            JourneyBar(legs: connection.legs)
 
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 if let ride = connection.firstRide {
                     TimelineView(.everyMinute) { context in
-                        Text(Fmt.countdown(to: ride.departure.addingTimeInterval(TimeInterval(max(0, ride.delay ?? 0))), now: context.date))
+                        Text(Fmt.countdown(to: connection.effectiveDeparture, now: context.date))
                             .font(.footnote.weight(.semibold))
                             // The selection highlight uses the accent color, so the tint would vanish.
                             .foregroundStyle(isSelected ? AnyShapeStyle(.primary) : AnyShapeStyle(.tint))
                     }
-                    Text("z \(ride.boardStop?.name ?? "")")
+                    Text(ride.boardStop?.name ?? "")
                         .lineLimit(1)
                     if let platform = ride.boardPlatform {
                         PlatformBadge(platform: platform)
@@ -48,16 +42,69 @@ struct ConnectionRow: View {
             }
             .font(.footnote)
             .foregroundStyle(.secondary)
+
+            if !tags.isEmpty {
+                HStack(spacing: 6) {
+                    ForEach(tags, id: \.text) { tag in
+                        Label(tag.text, systemImage: tag.symbol)
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(tag.color)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(tag.color.opacity(0.12), in: .capsule)
+                    }
+                }
+            }
         }
         .padding(.vertical, 4)
         .accessibilityElement(children: .combine)
     }
 
+    private var times: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
+            Text(Fmt.time(connection.departure))
+            Image(systemName: "arrow.right")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(.secondary)
+            Text(Fmt.time(connection.arrival))
+            if let offset = Fmt.dayOffset(from: connection.departure, to: connection.arrival) {
+                Text("+\(offset)")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.orange)
+                    .baselineOffset(8)
+            }
+        }
+        .font(.title3.weight(.semibold))
+        .monospacedDigit()
+    }
+
     private var trailingInfo: String {
         var parts = [Fmt.transfers(connection.transferCount)]
-        if let price = connection.prices.first { parts.append(price.formatted) }
-        let day = Fmt.day(connection.departure)
-        if day != "dnes" { parts.insert(day, at: 0) }
+        if let price = connection.totalPrice { parts.append(price.formatted) }
         return parts.joined(separator: " · ")
+    }
+
+    private struct Tag {
+        let text: String
+        let symbol: String
+        let color: Color
+    }
+
+    private var tags: [Tag] {
+        var tags: [Tag] = []
+        if isFastest { tags.append(Tag(text: "Nejrychlejší", symbol: "hare.fill", color: .green)) }
+        let risks = connection.rides.dropFirst().compactMap { connection.transfer(before: $0.id)?.risk }
+        if risks.contains(.missed) {
+            tags.append(Tag(text: "Přestup ohrožen", symbol: "exclamationmark.triangle.fill", color: .red))
+        } else if risks.contains(.tight) {
+            tags.append(Tag(text: "Těsný přestup", symbol: "timer", color: .orange))
+        }
+        if connection.hasWarnings {
+            tags.append(Tag(text: "Omezení provozu", symbol: "exclamationmark.bubble.fill", color: .orange))
+        }
+        if showsDestination, let destination = connection.destination {
+            tags.append(Tag(text: "do \(destination.name)", symbol: "mappin", color: .secondary))
+        }
+        return tags
     }
 }

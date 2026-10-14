@@ -46,25 +46,40 @@ enum ResponseParser {
                     if let ride = ride(item, stops: stops, agencies: agencies) { legs.append(.ride(ride)) }
                 case 1:
                     if let walk = walk(item, index: n) { legs.append(.walk(walk)) }
+                case 2:
+                    if let from = item["departureISO"]?.isoDate, let to = item["arrivalISO"]?.isoDate, to > from {
+                        legs.append(.wait(WaitLeg(id: n, departure: from, arrival: to)))
+                    }
                 default:
                     break
                 }
             }
 
             let prices = route["payment"]?.array.compactMap { p -> Price? in
-                guard p["type"]?.string == "price", let amount = p["price"]?.double else { return nil }
+                let kind: Price.Kind
+                switch p["type"]?.string {
+                case "price": kind = .total
+                case "partialprice": kind = .partial
+                default: return nil
+                }
+                guard let amount = p["price"]?.double else { return nil }
+                let seller = (p["eshopName"]?.string).flatMap { $0.isEmpty ? nil : $0 } ?? p["source"]?["name"]?.string
                 return Price(
+                    kind: kind,
                     amount: amount,
                     currency: p["currency_type"]?.string ?? "CZK",
-                    seller: p["eshopName"]?.string ?? p["source"]?["name"]?.string,
-                    url: (p["url"]?.string).flatMap(URL.init(string:)))
+                    seller: seller,
+                    from: p["stopFrom"]?.string,
+                    to: p["stopTo"]?.string,
+                    url: (p["url"]?.string).flatMap { URL(string: $0) ?? URL(string: $0.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "") })
             } ?? []
 
             return Connection(
                 id: route["hash"]?.int ?? Int(departure.timeIntervalSince1970),
                 departure: departure,
                 arrival: arrival,
-                transferCount: route["transferCount"]?.int ?? max(0, legs.filter { if case .ride = $0 { true } else { false } }.count - 1),
+                transferCount: route["transferCount"]?.int
+                    ?? max(0, legs.filter { if case .ride = $0 { true } else { false } }.count - 1),
                 legs: legs,
                 prices: prices,
                 startCoordinate: Coordinate(pair: route["startPos"]),

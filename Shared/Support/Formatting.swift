@@ -30,6 +30,14 @@ enum Fmt {
         return dayFormatter.string(from: date)
     }
 
+    /// Number of calendar days between two dates in Prague (nil when same day).
+    static func dayOffset(from start: Date, to end: Date) -> Int? {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = RPCDate.prague
+        let days = cal.dateComponents([.day], from: cal.startOfDay(for: start), to: cal.startOfDay(for: end)).day ?? 0
+        return days > 0 ? days : nil
+    }
+
     static func duration(_ interval: TimeInterval) -> String {
         let minutes = Int((interval / 60).rounded())
         if minutes < 60 { return "\(minutes) min" }
@@ -52,6 +60,14 @@ enum Fmt {
         if minutes <= 0 { return "teď" }
         if minutes < 60 { return "za \(minutes) min" }
         return "za " + duration(Double(minutes) * 60)
+    }
+
+    /// Compact countdown for widgets: "teď", "7 min", or the clock time when far away.
+    static func shortCountdown(to date: Date, now: Date = .now) -> String {
+        let minutes = Int((date.timeIntervalSince(now) / 60).rounded(.down))
+        if minutes <= 0 { return "teď" }
+        if minutes < 60 { return "\(minutes) min" }
+        return time(date)
     }
 
     static func transfers(_ count: Int) -> String {
