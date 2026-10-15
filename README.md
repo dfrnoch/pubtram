@@ -35,7 +35,7 @@ Open `Pubtram.xcodeproj` and run the `Pubtram` scheme. There are no dependencies
 | `Shared/` | API client, models, persistence (app group), shared views and intents. Compiled into the app *and* the widget extension |
 | `Pubtram/` | App: navigation, view models, screens, Shortcuts |
 | `PubtramWidgets/` | Widget extension: widgets and Live Activity |
-| `Config/` | Info.plists and entitlements (app group `group.cz.lynx.pubtram`) |
+| `Config/` | Info.plists and entitlements (app group `group.dev.frnoch.pubtram`) |
 
 To run on a device, set your team and change the bundle IDs and the app group to your own.
 

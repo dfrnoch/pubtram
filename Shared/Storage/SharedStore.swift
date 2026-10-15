@@ -3,7 +3,7 @@ import Foundation
 
 /// Persistence shared between the app, widgets and intents (via the app group).
 enum SharedStore {
-    static let appGroup = "group.cz.lynx.pubtram"
+    static let appGroup = "group.dev.frnoch.pubtram"
 
     enum Key: String {
         case favoriteRoutes = "favoriteRoutes.v2"
