@@ -54,10 +54,8 @@ struct ResultsView: View {
             }
         }
         .listSectionSpacing(.compact)
-        .safeAreaBar(edge: .top) {
-            QueryChips(showsTime: $showsTime, showsOptions: $showsOptions)
-        }
         .navigationTitle(model.searchedRoute?.compactLabel ?? "Spojení")
+        .navigationSubtitle(subtitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbar }
         .refreshable { await model.refreshLive() }
@@ -102,8 +100,24 @@ struct ResultsView: View {
         }
     }
 
+    /// Time plus any active filters, shown under the title.
+    private var subtitle: String {
+        var parts = [TimeLabel.text(date: model.date, isDeparture: model.isDeparture)]
+        if model.sort != .departure { parts.append(model.sort.shortTitle) }
+        if !model.lineFilter.isEmpty {
+            let lines = model.lineFilter.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+            parts.append((lines.count == 1 ? "linka " : "linky ") + lines.joined(separator: ", "))
+        }
+        if let summary = store.searchOptions.summary { parts.append(summary) }
+        return parts.joined(separator: " · ")
+    }
+
     @ToolbarContentBuilder
     private var toolbar: some ToolbarContent {
+        ToolbarItem(placement: .primaryAction) {
+            FilterMenu(showsTime: $showsTime, showsOptions: $showsOptions)
+        }
+        ToolbarSpacer(.fixed, placement: .primaryAction)
         ToolbarItem(placement: .primaryAction) {
             if let route = model.searchedRoute {
                 Button {
@@ -145,7 +159,8 @@ struct ResultsView: View {
 
 // MARK: - Pieces
 
-private struct QueryChips: View {
+/// Everything that shapes the results – time, sorting, lines, options – behind one toolbar button.
+private struct FilterMenu: View {
     @Environment(SearchModel.self) private var model
     @Environment(AppStore.self) private var store
     @Binding var showsTime: Bool
@@ -154,67 +169,56 @@ private struct QueryChips: View {
     var body: some View {
         @Bindable var model = model
         @Bindable var store = store
-        ScrollView(.horizontal) {
-            HStack(spacing: 8) {
-                Menu {
-                    Button("Odjezd teď", systemImage: "clock.arrow.circlepath") { setTime(nil) }
+        Menu {
+            Section("Čas") {
+                Button("Odjezd teď", systemImage: "clock.arrow.circlepath") { setTime(nil) }
+                Menu("Později", systemImage: "clock") {
                     Button("Za 15 minut") { setTime(15) }
                     Button("Za 30 minut") { setTime(30) }
                     Button("Za hodinu") { setTime(60) }
-                    Divider()
-                    Button("Vybrat čas…", systemImage: "calendar") { showsTime = true }
-                } label: {
-                    ChipLabel(
-                        TimeLabel.text(date: model.date, isDeparture: model.isDeparture), systemImage: "clock",
-                        isActive: model.date != nil || !model.isDeparture)
+                    Button("Za 2 hodiny") { setTime(120) }
                 }
-                .menuStyle(.button)
-                .buttonStyle(.plain)
+                Button("Vybrat čas…", systemImage: "calendar") { showsTime = true }
+            }
+
+            Section {
+                Picker(selection: $model.sort) {
+                    ForEach(SearchModel.Sort.allCases) { sort in
+                        Text(sort.title).tag(sort)
+                    }
+                } label: {
+                    Label("Řazení", systemImage: "arrow.up.arrow.down")
+                    Text(model.sort.title)
+                }
+                .pickerStyle(.menu)
 
                 if model.availableLines.count > 1 {
                     Menu {
                         LineFilterMenuItems(lines: model.availableLines, selection: $model.lineFilter)
                     } label: {
-                        ChipLabel(linesTitle, systemImage: "line.3.horizontal.decrease", isActive: !model.lineFilter.isEmpty)
+                        Label("Linky", systemImage: "tram")
+                        Text(linesTitle)
                     }
                     .menuActionDismissBehavior(.disabled)
-                    .menuStyle(.button)
-                    .buttonStyle(.plain)
                 }
-
-                Menu {
-                    Picker("Řazení", selection: $model.sort) {
-                        ForEach(SearchModel.Sort.allCases) { sort in
-                            Text(sort.title).tag(sort)
-                        }
-                    }
-                } label: {
-                    ChipLabel(model.sort.shortTitle, systemImage: "arrow.up.arrow.down", isActive: model.sort != .departure)
-                }
-                .menuStyle(.button)
-                .buttonStyle(.plain)
-
-                Menu {
-                    Section("Pohodlí") {
-                        Toggle(isOn: $store.searchOptions.lowFloor) { Label("Bezbariérově", systemImage: "figure.roll") }
-                        Toggle(isOn: $store.searchOptions.stroller) { Label("S kočárkem", systemImage: "stroller.fill") }
-                        Toggle(isOn: $store.searchOptions.bike) { Label("S kolem", systemImage: "bicycle") }
-                        Toggle(isOn: $store.searchOptions.airCondition) { Label("Klimatizace", systemImage: "snowflake") }
-                    }
-                    Button("Všechny možnosti…", systemImage: "slider.horizontal.3") { showsOptions = true }
-                } label: {
-                    ChipLabel(
-                        store.searchOptions.summary ?? "Možnosti", systemImage: "slider.horizontal.3",
-                        isActive: !store.searchOptions.isDefault)
-                }
-                .menuStyle(.button)
-                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
-            .padding(.vertical, 8)
+
+            Section("Pohodlí") {
+                Toggle(isOn: $store.searchOptions.lowFloor) { Label("Bezbariérově", systemImage: "figure.roll") }
+                Toggle(isOn: $store.searchOptions.stroller) { Label("S kočárkem", systemImage: "stroller.fill") }
+                Toggle(isOn: $store.searchOptions.bike) { Label("S kolem", systemImage: "bicycle") }
+                Toggle(isOn: $store.searchOptions.airCondition) { Label("Klimatizace", systemImage: "snowflake") }
+                Button("Všechny možnosti…", systemImage: "slider.horizontal.3") { showsOptions = true }
+            }
+        } label: {
+            Label(
+                "Filtry",
+                systemImage: isFiltered ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease")
         }
-        .scrollIndicators(.hidden)
-        .contentMargins(.horizontal, 16, for: .scrollContent)
+    }
+
+    private var isFiltered: Bool {
+        model.sort != .departure || !model.lineFilter.isEmpty || !store.searchOptions.isDefault
     }
 
     /// Departure in `minutes` from now, or now when `nil`.
@@ -225,9 +229,8 @@ private struct QueryChips: View {
     }
 
     private var linesTitle: String {
-        guard !model.lineFilter.isEmpty else { return "Linky" }
-        let sorted = model.lineFilter.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
-        return sorted.count == 1 ? "Linka \(sorted[0])" : "Linky \(sorted.joined(separator: ", "))"
+        guard !model.lineFilter.isEmpty else { return "Všechny" }
+        return model.lineFilter.sorted { $0.localizedStandardCompare($1) == .orderedAscending }.joined(separator: ", ")
     }
 }
 
