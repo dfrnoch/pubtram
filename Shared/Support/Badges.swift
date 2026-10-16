@@ -367,3 +367,41 @@ struct ChipLabelStyle: LabelStyle {
 extension LabelStyle where Self == ChipLabelStyle {
     static var chip: ChipLabelStyle { ChipLabelStyle() }
 }
+
+/// Filter chip: optional icon, value and a menu chevron in a capsule (like Apple Maps' "Leave Now ⌄").
+/// Tinted when the value differs from the default. Use with `.buttonStyle(.plain)` on buttons and menus.
+struct ChipLabel: View {
+    let title: String
+    let systemImage: String?
+    var showsChevron = true
+    var isActive = false
+
+    init(_ title: String, systemImage: String? = nil, showsChevron: Bool = true, isActive: Bool = false) {
+        self.title = title
+        self.systemImage = systemImage
+        self.showsChevron = showsChevron
+        self.isActive = isActive
+    }
+
+    var body: some View {
+        HStack(spacing: 5) {
+            if let systemImage {
+                Image(systemName: systemImage)
+                    .imageScale(.small)
+            }
+            Text(title)
+                .lineLimit(1)
+            if showsChevron {
+                Image(systemName: "chevron.down")
+                    .font(.caption2.weight(.bold))
+                    .opacity(0.6)
+            }
+        }
+        .font(.subheadline.weight(.medium))
+        .foregroundStyle(isActive ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+        .background(isActive ? AnyShapeStyle(.tint.opacity(0.18)) : AnyShapeStyle(.fill.tertiary), in: .capsule)
+        .contentShape(.capsule)
+    }
+}

@@ -27,6 +27,15 @@ final class SearchModel {
             case .transfers: "Podle přestupů"
             }
         }
+        /// Label for the sort chip.
+        var shortTitle: String {
+            switch self {
+            case .departure: "Odjezd"
+            case .arrival: "Příjezd"
+            case .duration: "Nejrychlejší"
+            case .transfers: "Nejméně přestupů"
+            }
+        }
     }
 
     // Form

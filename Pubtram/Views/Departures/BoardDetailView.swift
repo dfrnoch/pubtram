@@ -53,15 +53,21 @@ struct BoardDetailView: View {
                 }
             }
         }
-        .safeAreaBar(edge: .top) {
-            if model.lines.count > 1 {
-                LineFilterChips(lines: model.lines, selection: $model.lineFilter)
-            }
-        }
         .navigationTitle(board.title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
+                if model.lines.count > 1 {
+                    Menu {
+                        LineFilterMenuItems(lines: model.lines, selection: $model.lineFilter)
+                    } label: {
+                        Label(
+                            "Linky",
+                            systemImage: model.lineFilter.isEmpty
+                                ? "line.3.horizontal.decrease" : "line.3.horizontal.decrease.circle.fill")
+                    }
+                    .menuActionDismissBehavior(.disabled)
+                }
                 if let saved = store.savedBoard(matching: board) {
                     Button("Upravit", systemImage: "slider.horizontal.3") { onEdit(saved) }
                 } else {
