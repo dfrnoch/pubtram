@@ -34,5 +34,7 @@ struct RootView: View {
                 DeparturesTab()
             }
         }
+        // iOS 26 soft fade under the navigation bar instead of a hard-edged blur band.
+        .scrollEdgeEffectStyle(.soft, for: .all)
     }
 }
