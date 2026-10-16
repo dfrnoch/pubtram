@@ -268,6 +268,22 @@ struct JourneyModelTests {
         #expect(FlowLayout.lines(widths: [], available: 300, spacing: 6).isEmpty)
     }
 
+    @Test func parsesStopModesFromSuggestSubtitle() {
+        let stop = Place(
+            placeID: 1, source: "pubt", name: "Česká",
+            subtitle: "Zastávka tramvaje, autobusu, trolejbusu, tramvaje, Brno, Česko", latitude: 0, longitude: 0)
+        #expect(stop.stopModes == [.tram, .bus, .trolley])
+        #expect(stop.shortSubtitle == "Brno")
+        let station = Place(
+            placeID: 2, source: "pubt", name: "Česká Třebová",
+            subtitle: "Vlaková stanice, stanice, Česká Třebová, Česko", latitude: 0, longitude: 0)
+        #expect(station.stopModes == [.train])
+        #expect(station.shortSubtitle == "Vlaková stanice")
+        let town = Place(placeID: 3, source: "muni", name: "Zlín", subtitle: "Statutární město, Česko", latitude: 0, longitude: 0)
+        #expect(town.stopModes.isEmpty)
+        #expect(town.shortSubtitle == "Statutární město")
+    }
+
     @Test func deepLinksRoundTrip() {
         for link in [DeepLink.route(id: "pubt:1:50.0,14.0→coor:0:1,2"), .board(id: "pubt:5|pubt:6#9,22"), .departures, .search] {
             #expect(DeepLink(url: link.url) == link)

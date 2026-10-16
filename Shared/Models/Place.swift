@@ -38,3 +38,39 @@ struct Place: Codable, Hashable, Sendable, Identifiable {
         }
     }
 }
+
+extension Place {
+    /// Suggest subtitle split into parts, without the trailing country.
+    private var subtitleParts: [String] {
+        var parts = (subtitle ?? "").split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        if let last = parts.last, ["Česko", "Czechia", "Česká republika"].contains(last) { parts.removeLast() }
+        return parts
+    }
+
+    /// Modes serving a stop, parsed from e.g. "Zastávka tramvaje, autobusu, Brno, Česko".
+    var stopModes: [VehicleType] {
+        guard isStop else { return [] }
+        let keys: [(String, VehicleType)] = [
+            ("metr", .metro), ("tramvaj", .tram), ("trolejbus", .trolley), ("autobus", .bus),
+            ("vlak", .train), ("železni", .train), ("lanov", .cable), ("přívoz", .ferry), ("lod", .ferry),
+        ]
+        var modes: [VehicleType] = []
+        for part in subtitleParts.dropLast() {
+            let lower = part.lowercased()
+            for (key, mode) in keys where lower.contains(key) && !modes.contains(mode) {
+                modes.append(mode)
+            }
+        }
+        return modes
+    }
+
+    /// Short location line: the town for stops ("Brno"), the subtitle without country otherwise.
+    /// When the stop name already starts with the town, the stop kind is shown instead ("Vlaková stanice").
+    var shortSubtitle: String? {
+        let parts = subtitleParts
+        guard let last = parts.last else { return nil }
+        guard isStop else { return parts.joined(separator: ", ") }
+        if name.hasPrefix(last), parts.count > 1 { return parts[0] }
+        return last
+    }
+}

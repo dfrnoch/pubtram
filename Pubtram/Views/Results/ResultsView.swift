@@ -92,6 +92,7 @@ struct ResultsView: View {
             content.tag(connection.id)
         } else {
             NavigationLink(value: SearchDestination.connection(connection.id)) { content }
+                .navigationLinkIndicatorVisibility(.hidden)
         }
     }
 

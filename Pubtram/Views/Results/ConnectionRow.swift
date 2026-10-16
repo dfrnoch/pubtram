@@ -36,7 +36,7 @@ struct ConnectionRow: View {
                     }
                 }
                 Spacer(minLength: 4)
-                Text(trailingInfo)
+                Text(Fmt.transfers(connection.transferCount))
                     .lineLimit(1)
                     .fixedSize()
             }
@@ -71,12 +71,6 @@ struct ConnectionRow: View {
         }
         .font(.title3.weight(.semibold))
         .monospacedDigit()
-    }
-
-    private var trailingInfo: String {
-        var parts = [Fmt.transfers(connection.transferCount)]
-        if let price = connection.totalPrice { parts.append(price.formatted) }
-        return parts.joined(separator: " · ")
     }
 
     private struct Tag {
