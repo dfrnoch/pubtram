@@ -14,20 +14,6 @@ struct ResultsView: View {
     var body: some View {
         @Bindable var model = model
         List(selection: usesSelection ? $model.selectedID : .constant(nil)) {
-            Section {
-                QueryChips(showsTime: $showsTime, showsOptions: $showsOptions)
-            }
-            .listRowBackground(Color.clear)
-            .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
-
-            if model.availableLines.count > 1 {
-                Section {
-                    LineFilterChips(lines: model.availableLines, selection: $model.lineFilter)
-                }
-                .listRowBackground(Color.clear)
-                .listRowInsets(EdgeInsets())
-            }
-
             if model.isSearching && !model.hasResults {
                 Section {
                     SearchingRow(pairCount: max(1, model.from.count * model.to.count))
@@ -68,6 +54,9 @@ struct ResultsView: View {
             }
         }
         .listSectionSpacing(.compact)
+        .safeAreaBar(edge: .top) {
+            QueryChips(showsTime: $showsTime, showsOptions: $showsOptions)
+        }
         .navigationTitle(model.searchedRoute?.compactLabel ?? "Spojení")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbar }
@@ -146,7 +135,7 @@ private struct QueryChips: View {
     @Binding var showsOptions: Bool
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+        ScrollView(.horizontal) {
             HStack(spacing: 8) {
                 Button {
                     showsTime = true
@@ -175,56 +164,73 @@ private struct QueryChips: View {
                 }
                 .buttonStyle(.glass)
 
+                if model.availableLines.count > 1 {
+                    Divider().frame(height: 24)
+                    LineFilterButtons(lines: model.availableLines, selection: Bindable(model).lineFilter)
+                }
             }
             .labelStyle(.chip)
-            .padding(.vertical, 4)
+            .padding(.vertical, 6)
         }
-        .scrollClipDisabled()
+        .scrollIndicators(.hidden)
+        .contentMargins(.horizontal, 16, for: .scrollContent)
     }
 }
 
+/// Full-width horizontally scrolling line filter.
 struct LineFilterChips: View {
     let lines: [(line: String, vehicle: VehicleType)]
     @Binding var selection: Set<String>
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+        ScrollView(.horizontal) {
             HStack(spacing: 8) {
-                Button {
-                    selection = []
-                } label: {
-                    Text("Všechny linky")
-                        .font(.subheadline.weight(.semibold))
-                }
-                .buttonStyle(.glass)
-                .tint(selection.isEmpty ? .accentColor : nil)
-
-                ForEach(lines, id: \.line) { item in
-                    let active = selection.isEmpty || selection.contains(item.line)
-                    Button {
-                        if selection.contains(item.line) {
-                            selection.remove(item.line)
-                        } else {
-                            selection.insert(item.line)
-                        }
-                    } label: {
-                        LineBadge(vehicle: item.vehicle, line: item.line)
-                            .opacity(active ? 1 : 0.35)
-                            .overlay(alignment: .topTrailing) {
-                                if selection.contains(item.line) {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .font(.caption2)
-                                        .foregroundStyle(.white, .tint)
-                                        .offset(x: 5, y: -5)
-                                }
-                            }
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityAddTraits(selection.contains(item.line) ? .isSelected : [])
-                }
+                LineFilterButtons(lines: lines, selection: $selection)
             }
-            .padding(.horizontal, 16)
             .padding(.vertical, 6)
+        }
+        .scrollIndicators(.hidden)
+        .contentMargins(.horizontal, 16, for: .scrollContent)
+    }
+}
+
+/// "Všechny linky" plus one toggle per line; meant to sit inside a horizontal stack.
+struct LineFilterButtons: View {
+    let lines: [(line: String, vehicle: VehicleType)]
+    @Binding var selection: Set<String>
+
+    var body: some View {
+        Button {
+            selection = []
+        } label: {
+            Text("Všechny linky")
+                .lineLimit(1)
+        }
+        .buttonStyle(.glass)
+        .tint(selection.isEmpty ? .accentColor : nil)
+
+        ForEach(lines, id: \.line) { item in
+            let active = selection.isEmpty || selection.contains(item.line)
+            Button {
+                if selection.contains(item.line) {
+                    selection.remove(item.line)
+                } else {
+                    selection.insert(item.line)
+                }
+            } label: {
+                LineBadge(vehicle: item.vehicle, line: item.line)
+                    .opacity(active ? 1 : 0.35)
+                    .overlay(alignment: .topTrailing) {
+                        if selection.contains(item.line) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.caption2)
+                                .foregroundStyle(.white, .tint)
+                                .offset(x: 5, y: -5)
+                        }
+                    }
+            }
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(selection.contains(item.line) ? .isSelected : [])
         }
     }
 }

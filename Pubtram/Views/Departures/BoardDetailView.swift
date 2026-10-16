@@ -16,14 +16,6 @@ struct BoardDetailView: View {
         @Bindable var model = model
         TimelineView(.periodic(from: .now, by: 15)) { context in
             List {
-                if model.lines.count > 1 {
-                    Section {
-                        LineFilterChips(lines: model.lines, selection: $model.lineFilter)
-                    }
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.clear)
-                }
-
                 Section {
                     if model.isLoading {
                         HStack { Spacer(); ProgressView(); Spacer() }
@@ -59,6 +51,11 @@ struct BoardDetailView: View {
                         Text("Aktualizováno v \(Fmt.time(update)) · obnovuje se automaticky")
                     }
                 }
+            }
+        }
+        .safeAreaBar(edge: .top) {
+            if model.lines.count > 1 {
+                LineFilterChips(lines: model.lines, selection: $model.lineFilter)
             }
         }
         .navigationTitle(board.title)

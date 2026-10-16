@@ -163,8 +163,9 @@ private struct ActionsRow: View {
                 }
             } label: {
                 Label(
-                    tracking ? "Ukončit sledování cesty" : "Sledovat cestu na zamčené obrazovce",
+                    tracking ? "Ukončit sledování" : "Sledovat cestu",
                     systemImage: tracking ? "stop.circle.fill" : "livephoto")
+                    .lineLimit(1)
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.glass)
