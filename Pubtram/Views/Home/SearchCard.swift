@@ -233,6 +233,7 @@ struct SearchCard: View {
                 }
                 Spacer(minLength: 0)
             }
+            .labelStyle(.chip)
             if let summary = store.searchOptions.summary {
                 Text(summary)
                     .font(.caption)

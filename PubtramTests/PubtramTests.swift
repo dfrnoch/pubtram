@@ -262,6 +262,12 @@ struct JourneyModelTests {
         #expect(abs(widths.reduce(0, +) - 300) < 0.001)
     }
 
+    @Test func flowLayoutWrapsWholeItems() {
+        #expect(FlowLayout.lines(widths: [100, 120, 90], available: 300, spacing: 6) == [[0, 1], [2]])
+        #expect(FlowLayout.lines(widths: [400, 50], available: 300, spacing: 6) == [[0], [1]])
+        #expect(FlowLayout.lines(widths: [], available: 300, spacing: 6).isEmpty)
+    }
+
     @Test func deepLinksRoundTrip() {
         for link in [DeepLink.route(id: "pubt:1:50.0,14.0→coor:0:1,2"), .board(id: "pubt:5|pubt:6#9,22"), .departures, .search] {
             #expect(DeepLink(url: link.url) == link)

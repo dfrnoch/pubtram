@@ -44,14 +44,9 @@ struct ConnectionRow: View {
             .foregroundStyle(.secondary)
 
             if !tags.isEmpty {
-                HStack(spacing: 6) {
+                FlowLayout {
                     ForEach(tags, id: \.text) { tag in
-                        Label(tag.text, systemImage: tag.symbol)
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(tag.color)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(tag.color.opacity(0.12), in: .capsule)
+                        Pill(text: tag.text, symbol: tag.symbol, color: tag.color)
                     }
                 }
             }
@@ -100,10 +95,10 @@ struct ConnectionRow: View {
             tags.append(Tag(text: "Těsný přestup", symbol: "timer", color: .orange))
         }
         if connection.hasWarnings {
-            tags.append(Tag(text: "Omezení provozu", symbol: "exclamationmark.bubble.fill", color: .orange))
+            tags.append(Tag(text: "Omezení", symbol: "exclamationmark.triangle.fill", color: .orange))
         }
         if showsDestination, let destination = connection.destination {
-            tags.append(Tag(text: "do \(destination.name)", symbol: "mappin", color: .secondary))
+            tags.append(Tag(text: destination.name, symbol: "mappin", color: .secondary))
         }
         return tags
     }

@@ -175,6 +175,7 @@ private struct QueryChips: View {
                 .buttonStyle(.glass)
 
             }
+            .labelStyle(.chip)
             .padding(.vertical, 4)
         }
         .scrollClipDisabled()
@@ -241,6 +242,7 @@ private struct PagingRow: View {
                     ProgressView()
                 } else {
                     Label(title, systemImage: systemImage)
+                        .labelStyle(.chip)
                         .font(.subheadline.weight(.medium))
                 }
                 Spacer()

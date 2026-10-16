@@ -275,3 +275,95 @@ struct WeightedHStack: Layout {
         }
     }
 }
+
+/// Small single-line tag: icon + text, never wraps.
+struct Pill: View {
+    let text: String
+    let symbol: String
+    var color: Color = .secondary
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: symbol)
+                .imageScale(.small)
+            Text(text)
+                .lineLimit(1)
+        }
+        .font(.caption.weight(.semibold))
+        .foregroundStyle(color)
+        .padding(.horizontal, 7)
+        .padding(.vertical, 3)
+        .background(color.opacity(0.14), in: .capsule)
+    }
+}
+
+/// Lays children out left to right and wraps whole children onto new lines
+/// instead of squeezing them.
+struct FlowLayout: Layout {
+    var spacing: CGFloat = 6
+    var lineSpacing: CGFloat = 6
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let available = proposal.width ?? .infinity
+        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+        let lines = Self.lines(widths: sizes.map(\.width), available: available, spacing: spacing)
+        let width = lines.map { line in
+            min(available, line.reduce(0) { $0 + sizes[$1].width } + spacing * CGFloat(line.count - 1))
+        }.max() ?? 0
+        let height = lines.reduce(0) { $0 + ($1.map { sizes[$0].height }.max() ?? 0) }
+            + lineSpacing * CGFloat(max(0, lines.count - 1))
+        return CGSize(width: width, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let sizes = subviews.map { $0.sizeThatFits(.unspecified) }
+        var y = bounds.minY
+        for line in Self.lines(widths: sizes.map(\.width), available: bounds.width, spacing: spacing) {
+            let height = line.map { sizes[$0].height }.max() ?? 0
+            var x = bounds.minX
+            for i in line {
+                // A child wider than the whole line gets truncated rather than overflowing.
+                let width = min(sizes[i].width, bounds.maxX - x)
+                subviews[i].place(
+                    at: CGPoint(x: x, y: y + height / 2), anchor: .leading,
+                    proposal: ProposedViewSize(width: width, height: sizes[i].height))
+                x += width + spacing
+            }
+            y += height + lineSpacing
+        }
+    }
+
+    /// Groups child indices into lines that fit `available`.
+    static func lines(widths: [CGFloat], available: CGFloat, spacing: CGFloat) -> [[Int]] {
+        var lines: [[Int]] = []
+        var current: [Int] = []
+        var used: CGFloat = 0
+        for (i, width) in widths.enumerated() {
+            let needed = current.isEmpty ? width : used + spacing + width
+            if !current.isEmpty && needed > available {
+                lines.append(current)
+                current = [i]
+                used = width
+            } else {
+                current.append(i)
+                used = needed
+            }
+        }
+        if !current.isEmpty { lines.append(current) }
+        return lines
+    }
+}
+
+/// Icon + title with tight spacing; the default style leaves a wide icon column inside lists.
+struct ChipLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 5) {
+            configuration.icon
+            configuration.title
+        }
+    }
+}
+
+extension LabelStyle where Self == ChipLabelStyle {
+    static var chip: ChipLabelStyle { ChipLabelStyle() }
+}
